@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090909">
+  <meta name="description" content="Общий учёт склада и закреплённого оружия">
+  <title>Арсенал — учёт склада</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;600;700;800&family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#overview" aria-label="Арсенал — главная">
+        <span class="brand-mark">A</span>
+        <span class="brand-copy"><strong>АРСЕНАЛ</strong><small>СКЛАДСКОЙ УЧЁТ</small></span>
+      </a>
+      <nav class="main-nav" aria-label="Основная навигация">
+        <button class="nav-link active" data-view="overview">ОБЗОР</button>
+        <button class="nav-link" data-view="warehouse">СКЛАД</button>
+        <button class="nav-link" data-view="assigned">ЗАКРЕПЛЕНО</button>
+        <button class="nav-link" data-view="journal">ЖУРНАЛ</button>
+      </nav>
+      <div class="top-actions">
+        <span class="connection-state" id="connectionState"><i></i><span>ЛОКАЛЬНЫЙ РЕЖИМ</span></span>
+        <button class="btn btn-ghost btn-small" id="settingsBtn">НАСТРОЙКИ</button>
+        <button class="btn btn-primary btn-small" id="addWeaponBtn">＋ ДОБАВИТЬ</button>
+        <button class="user-pill hidden" id="userPill" title="Выйти из аккаунта"><span class="user-dot"></span><span id="userEmail">АККАУНТ</span><span class="exit-mark">↗</span></button>
+      </div>
+      <button class="mobile-menu" id="mobileMenuBtn" aria-label="Открыть меню">☰</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="sidebar">
+      <div class="side-label">РАЗДЕЛЫ УЧЁТА</div>
+      <button class="side-link active" data-view="overview"><span class="side-index">01</span> Сводка склада</button>
+      <button class="side-link" data-view="warehouse"><span class="side-index">02</span> Оружие на складе</button>
+      <button class="side-link" data-view="assigned"><span class="side-index">03</span> Закреплено за игроками</button>
+      <button class="side-link" data-view="journal"><span class="side-index">04</span> История операций</button>
+      <div class="side-divider"></div>
+      <div class="side-note">
+        <span class="side-label">ПРАВИЛО УЧЁТА</span>
+        <p>Каждая выдача и каждый возврат фиксируются в журнале. Проверяйте записи после операции.</p>
+      </div>
+      <div class="sidebar-footer">DEPARTMENT INVENTORY<br>BUILD 1.0.0</div>
+    </aside>
+
+    <section class="content">
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">HATE · SERVER / DEPARTMENT</div>
+          <h1 id="pageTitle">УЧЁТ АРСЕНАЛА</h1>
+          <p id="pageSubtitle">Общий склад оружия и история его перемещений</p>
+        </div>
+        <div class="heading-actions">
+          <button class="btn btn-ghost" id="exportBtn">ЭКСПОРТ CSV ↓</button>
+          <button class="btn btn-outline" id="newActionBtn">ЗАПИСАТЬ ОПЕРАЦИЮ</button>
+        </div>
+      </div>
+
+      <div class="demo-notice" id="demoNotice">
+        <span class="notice-icon">i</span>
+        <span><strong>Локальный режим.</strong> Записи сохраняются только в этом браузере. Для общего доступа подключите Supabase в настройках.</span>
+        <button class="notice-action" id="connectNowBtn">ПОДКЛЮЧИТЬ БАЗУ →</button>
+      </div>
+
+      <section class="view-panel active" id="view-overview">
+        <div class="stats-grid">
+          <article class="stat-card"><div class="stat-top"><span>ВСЕГО ЕДИНИЦ</span><span class="stat-icon">▤</span></div><strong id="statTotal">0</strong><small>зарегистрировано в системе</small></article>
+          <article class="stat-card"><div class="stat-top"><span>НА СКЛАДЕ</span><span class="stat-icon green">＋</span></div><strong id="statStock">0</strong><small>доступно к выдаче</small></article>
+          <article class="stat-card"><div class="stat-top"><span>ЗАКРЕПЛЕНО</span><span class="stat-icon red">⌖</span></div><strong id="statAssigned">0</strong><small>на руках у игроков</small></article>
+          <article class="stat-card"><div class="stat-top"><span>ОПЕРАЦИИ</span><span class="stat-icon">≡</span></div><strong id="statToday">0</strong><small>за сегодня</small></article>
+        </div>
+
+        <div class="section-head"><div><span class="section-kicker">СОСТОЯНИЕ СИСТЕМЫ</span><h2>ТЕКУЩАЯ СИТУАЦИЯ</h2></div><span class="updated-label" id="updatedLabel">ОБНОВЛЕНО —</span></div>
+        <div class="overview-grid">
+          <article class="panel stock-overview">
+            <div class="panel-head"><div><span class="panel-kicker">01 / ДОСТУПНО</span><h3>На складе</h3></div><button class="text-action" data-goto="warehouse">ВЕСЬ СПИСОК →</button></div>
+            <div id="overviewStock" class="compact-list"></div>
+          </article>
+          <article class="panel assigned-overview">
+            <div class="panel-head"><div><span class="panel-kicker">02 / ВЫДАНО</span><h3>Закреплённое оружие</h3></div><button class="text-action" data-goto="assigned">ПОДРОБНЕЕ →</button></div>
+            <div id="overviewAssigned" class="compact-list"></div>
+          </article>
+          <article class="panel recent-overview">
+            <div class="panel-head"><div><span class="panel-kicker">03 / ПОСЛЕДНИЕ ЗАПИСИ</span><h3>Недавние операции</h3></div><button class="text-action" data-goto="journal">ЖУРНАЛ →</button></div>
+            <div id="overviewTransactions" class="recent-list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view-panel" id="view-warehouse">
+        <div class="toolbar">
+          <label class="search-box"><span>⌕</span><input id="warehouseSearch" type="search" placeholder="Поиск по названию, категории или номеру..."></label>
+          <select id="warehouseCategory" class="filter-select" aria-label="Фильтр по категории"><option value="">Все категории</option><option>Пистолет</option><option>Револьвер</option><option>Винтовка</option><option>Дробовик</option><option>Холодное оружие</option><option>Другое</option></select>
+          <span class="result-count" id="warehouseCount">0 ЕД.</span>
+        </div>
+        <div class="panel table-panel">
+          <div class="table-scroll"><table><thead><tr><th>НАИМЕНОВАНИЕ</th><th>КАТЕГОРИЯ</th><th>ИНВ. НОМЕР</th><th>СОСТОЯНИЕ</th><th class="align-right">ДЕЙСТВИЕ</th></tr></thead><tbody id="warehouseRows"></tbody></table></div>
+          <div class="empty-state hidden" id="warehouseEmpty"><span>⌕</span><strong>Ничего не найдено</strong><small>Измените поисковый запрос или добавьте оружие на склад.</small></div>
+        </div>
+      </section>
+
+      <section class="view-panel" id="view-assigned">
+        <div class="toolbar">
+          <label class="search-box"><span>⌕</span><input id="assignedSearch" type="search" placeholder="Поиск по игроку или оружию..."></label>
+          <span class="result-count" id="assignedCount">0 ЗАПИСЕЙ</span>
+        </div>
+        <div class="panel table-panel">
+          <div class="table-scroll"><table><thead><tr><th>ИГРОК</th><th>ОРУЖИЕ</th><th>КАТЕГОРИЯ</th><th>ИНВ. НОМЕР</th><th>ВЫДАНО</th><th class="align-right">ДЕЙСТВИЕ</th></tr></thead><tbody id="assignedRows"></tbody></table></div>
+          <div class="empty-state hidden" id="assignedEmpty"><span>⌖</span><strong>Нет закреплённого оружия</strong><small>После выдачи оружие появится в этом разделе.</small></div>
+        </div>
+      </section>
+
+      <section class="view-panel" id="view-journal">
+        <div class="toolbar">
+          <label class="search-box"><span>⌕</span><input id="journalSearch" type="search" placeholder="Поиск по оружию, игроку или сотруднику..."></label>
+          <select id="journalAction" class="filter-select" aria-label="Фильтр по операции"><option value="">Все операции</option><option>Приход</option><option>Выдача</option><option>Возврат</option><option>Списание</option></select>
+          <span class="result-count" id="journalCount">0 ЗАПИСЕЙ</span>
+        </div>
+        <div class="panel table-panel">
+          <div class="table-scroll"><table><thead><tr><th>ДАТА И ВРЕМЯ</th><th>ОПЕРАЦИЯ</th><th>ОРУЖИЕ</th><th>ИГРОК</th><th>КТО ПРОВЁЛ</th><th>ПРИМЕЧАНИЕ</th></tr></thead><tbody id="journalRows"></tbody></table></div>
+          <div class="empty-state hidden" id="journalEmpty"><span>≡</span><strong>Журнал пока пуст</strong><small>История появится после первой операции.</small></div>
+        </div>
+      </section>
+      <footer class="content-footer"><span>АРСЕНАЛ / СИСТЕМА СКЛАДСКОГО УЧЁТА</span><span>Все операции фиксируются в журнале</span></footer>
+    </section>
+  </main>
+
+  <dialog class="modal" id="weaponModal">
+    <form id="weaponForm" class="modal-card">
+      <div class="modal-head"><div><span class="modal-kicker">СКЛАД / НОВАЯ ЗАПИСЬ</span><h2>ДОБАВИТЬ ОРУЖИЕ</h2></div><button type="button" class="modal-close" data-close="weaponModal">×</button></div>
+      <div class="form-grid">
+        <label class="field full"><span>НАЗВАНИЕ ОРУЖИЯ *</span><input name="name" required maxlength="100" placeholder="Например, Schofield Revolver"></label>
+        <label class="field"><span>КАТЕГОРИЯ</span><select name="category"><option>Револьвер</option><option>Пистолет</option><option>Винтовка</option><option>Дробовик</option><option>Холодное оружие</option><option>Другое</option></select></label>
+        <label class="field"><span>ИНВЕНТАРНЫЙ / СЕРИЙНЫЙ НОМЕР</span><input name="serial" maxlength="60" placeholder="Необязательно"></label>
+        <label class="field full"><span>ПРИМЕЧАНИЕ</span><textarea name="notes" rows="2" maxlength="500" placeholder="Состояние, комплектность и т. п."></textarea></label>
+        <label class="field full"><span>КТО ПРИНИМАЕТ ОРУЖИЕ *</span><input name="actor" required maxlength="80" placeholder="Имя сотрудника"></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close="weaponModal">ОТМЕНА</button><button class="btn btn-primary" type="submit">ДОБАВИТЬ НА СКЛАД</button></div>
+      <p class="form-error" id="weaponError"></p>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="actionModal">
+    <form id="actionForm" class="modal-card">
+      <div class="modal-head"><div><span class="modal-kicker" id="actionKicker">СКЛАД / ОПЕРАЦИЯ</span><h2 id="actionTitle">ВЫДАТЬ ОРУЖИЕ</h2></div><button type="button" class="modal-close" data-close="actionModal">×</button></div>
+      <div class="selected-weapon hidden" id="selectedWeapon"></div>
+      <div class="form-grid">
+        <label class="field full hidden" id="actionWeaponField"><span>ВЫБЕРИТЕ ОРУЖИЕ *</span><select name="weaponChoice" id="actionWeaponSelect" required></select></label>
+        <label class="field full hidden" id="actionKindField"><span>ТИП ОПЕРАЦИИ *</span><select name="actionChoice" id="actionKindSelect" required></select></label>
+        <input type="hidden" name="weaponId">
+        <input type="hidden" name="action">
+        <label class="field full" id="playerField"><span>ИГРОК, ЗА КОТОРЫМ ЗАКРЕПЛЯЕТСЯ *</span><input name="player" maxlength="100" placeholder="Имя / игровой ID"></label>
+        <label class="field full"><span>КТО ПРОВОДИТ ОПЕРАЦИЮ *</span><input name="actor" required maxlength="80" placeholder="Имя сотрудника"></label>
+        <label class="field full"><span id="actionNoteLabel">ПРИМЕЧАНИЕ</span><textarea name="notes" rows="2" maxlength="500" placeholder="Дополнительная информация"></textarea></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close="actionModal">ОТМЕНА</button><button class="btn btn-primary" type="submit" id="actionSubmit">ПОДТВЕРДИТЬ</button></div>
+      <p class="form-error" id="actionError"></p>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="settingsModal">
+    <form id="settingsForm" class="modal-card">
+      <div class="modal-head"><div><span class="modal-kicker">КОНФИГУРАЦИЯ / СИНХРОНИЗАЦИЯ</span><h2>НАСТРОЙКИ БАЗЫ</h2></div><button type="button" class="modal-close" data-close="settingsModal">×</button></div>
+      <div class="settings-explainer"><strong>Общий доступ для всех участников</strong><p>Укажите URL проекта Supabase и публичный anon key. После сохранения войдите под учётной записью Supabase. Секретный service_role key сюда добавлять нельзя.</p></div>
+      <div class="form-grid">
+        <label class="field full"><span>SUPABASE PROJECT URL</span><input name="url" type="url" placeholder="https://xxxx.supabase.co"></label>
+        <label class="field full"><span>SUPABASE ANON / PUBLISHABLE KEY</span><textarea name="key" rows="3" placeholder="eyJhbGciOi... или sb_publishable_..."></textarea></label>
+      </div>
+      <div class="setup-steps"><span>1. Создайте проект Supabase.</span><span>2. Выполните SQL из файла <b>supabase-schema.sql</b>.</span><span>3. Создайте пользователям учётные записи в Authentication.</span><span>4. Каждый участник вводит эти настройки один раз на своём устройстве.</span></div>
+      <div class="modal-actions settings-actions"><button type="button" class="btn btn-ghost" id="disconnectBtn">ОТКЛЮЧИТЬ БАЗУ</button><button type="button" class="btn btn-ghost" data-close="settingsModal">ЗАКРЫТЬ</button><button class="btn btn-primary" type="submit">СОХРАНИТЬ И ПОДКЛЮЧИТЬ</button></div>
+      <p class="form-error" id="settingsError"></p>
+    </form>
+  </dialog>
+
+  <dialog class="modal login-modal" id="loginModal">
+    <form id="loginForm" class="modal-card">
+      <div class="login-emblem">A</div>
+      <div class="modal-head centered"><div><span class="modal-kicker">ОБЩАЯ БАЗА / АВТОРИЗАЦИЯ</span><h2>ВХОД В СИСТЕМУ</h2><p>Данные доступны только авторизованным участникам.</p></div></div>
+      <div class="form-grid">
+        <label class="field full"><span>EMAIL</span><input name="email" type="email" autocomplete="username" required placeholder="name@example.com"></label>
+        <label class="field full"><span>ПАРОЛЬ</span><input name="password" type="password" autocomplete="current-password" required placeholder="Пароль"></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn btn-ghost" id="loginSettingsBtn">НАСТРОЙКИ БАЗЫ</button><button class="btn btn-primary" type="submit">ВОЙТИ</button></div>
+      <p class="form-error" id="loginError"></p>
+      <p class="login-footnote">Учётные записи создаются администратором в Supabase → Authentication → Users.</p>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
